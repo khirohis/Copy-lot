@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/models/text_type.dart';
+import '../providers/clipboard_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/translation_provider.dart';
 import '../widgets/text_card.dart';
 import '../widgets/translation_direction_switch.dart';
 import 'settings_screen.dart';
@@ -16,11 +19,37 @@ class MainScreen extends ConsumerStatefulWidget {
 
 class _MainScreenState extends ConsumerState<MainScreen> {
   bool _hasCheckedInitialApiKey = false;
+  late final AppLifecycleListener _lifecycleListener;
 
-  // モック用のテキスト状態（今後のネイティブクリップボード連携で動的更新に置き換え）
-  final String _sourceText = '';
-  final String _translatedText = '';
-  final bool _isTranslating = false;
+  @override
+  void initState() {
+    super.initState();
+
+    // ライフサイクル連動: ウィンドウ表示中のみ監視、非表示/最小化時はリスナー解除
+    _lifecycleListener = AppLifecycleListener(
+      onResume: () =>
+          ref.read(clipboardNotifierProvider.notifier).startListening(),
+      onHide: () =>
+          ref.read(clipboardNotifierProvider.notifier).stopListening(),
+      onPause: () =>
+          ref.read(clipboardNotifierProvider.notifier).stopListening(),
+      onRestart: () =>
+          ref.read(clipboardNotifierProvider.notifier).startListening(),
+    );
+
+    // 初回起動時の監視開始
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(clipboardNotifierProvider.notifier).startListening();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener.dispose();
+    super.dispose();
+  }
 
   void _checkApiKey(bool hasApiKey, bool isLoading) {
     if (isLoading || _hasCheckedInitialApiKey) return;
@@ -50,10 +79,60 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsNotifierProvider);
+    final clipboard = ref.watch(clipboardNotifierProvider);
+    final translation = ref.watch(translationNotifierProvider);
     final theme = Theme.of(context);
+
+    // クリップボードテキスト変更検知 → 自動翻訳実行
+    ref.listen(clipboardNotifierProvider, (prev, next) {
+      if (next.hasText && prev?.currentText != next.currentText) {
+        ref.read(translationNotifierProvider.notifier).translate(next.currentText);
+      }
+    });
+
+    // 翻訳方向切り替え検知 → 現在のテキストを再翻訳
+    ref.listen(settingsNotifierProvider.select((s) => s.direction), (prev, next) {
+      final currentText = ref.read(clipboardNotifierProvider).currentText;
+      if (currentText.trim().isNotEmpty && prev != next) {
+        ref.read(translationNotifierProvider.notifier).translate(currentText);
+      }
+    });
+
+    // 5,000文字切り詰め時の非破壊的通知
+    ref.listen(clipboardNotifierProvider, (prev, next) {
+      if (next.isTruncated && prev?.currentText != next.currentText) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('5,000文字を超過したため、先頭5,000文字に切り詰められました。'),
+            duration: Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
+
+    // 翻訳エラー発生時の非破壊的通知
+    ref.listen(translationNotifierProvider.select((s) => s.errorMessage),
+        (prev, next) {
+      if (next != null && next.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next),
+            backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        ref.read(translationNotifierProvider.notifier).clearError();
+      }
+    });
 
     // 初回APIキー未設定時のチェック
     _checkApiKey(settings.hasApiKey, settings.isLoading);
+
+    final translationResult = translation.result;
+    final isWord = translationResult?.textType == TextType.word;
+    final translationCardTitle = isWord ? '訳語 (Word)' : '翻訳 (Translation)';
 
     return Scaffold(
       appBar: AppBar(
@@ -107,20 +186,22 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // 原文カード
+                    // 原文カード (クリップボード取得テキストをバインド)
                     TextCard(
                       title: '原文 (Source)',
-                      content: _sourceText,
+                      content: clipboard.currentText,
                       placeholder: 'クリップボードにコピーしたテキストが自動で取り込まれます...',
                     ),
                     const SizedBox(height: 12),
 
                     // 翻訳結果カード
                     TextCard(
-                      title: '翻訳 (Translation)',
-                      content: _translatedText,
-                      placeholder: '翻訳結果がここに表示されます...',
-                      isLoading: _isTranslating,
+                      title: translationCardTitle,
+                      content: translationResult?.translatedText ?? '',
+                      placeholder: translationResult?.isSkipped == true
+                          ? '（${translationResult?.skipReason}）'
+                          : '翻訳結果がここに表示されます...',
+                      isLoading: translation.isLoading,
                     ),
                   ],
                 ),
@@ -142,14 +223,14 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                   Container(
                     width: 8,
                     height: 8,
-                    decoration: const BoxDecoration(
-                      color: Colors.green,
+                    decoration: BoxDecoration(
+                      color: clipboard.isListening ? Colors.green : Colors.grey,
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'クリップボード監視待機中',
+                    clipboard.isListening ? 'クリップボード監視中' : 'クリップボード監視停止中',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                       fontSize: 11,

@@ -1,11 +1,20 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:copy_lot/domain/models/settings_state.dart';
 import 'package:copy_lot/domain/models/translation_direction.dart';
 import 'package:copy_lot/domain/repositories/settings_repository.dart';
+import 'package:copy_lot/domain/models/text_type.dart';
+import 'package:copy_lot/domain/models/translation_result.dart';
+import 'package:copy_lot/domain/repositories/translation_repository.dart';
+import 'package:copy_lot/presentation/providers/translation_provider.dart';
 import 'package:copy_lot/app.dart';
 import 'package:copy_lot/presentation/providers/settings_provider.dart';
+
+import 'package:copy_lot/domain/models/clipboard_event.dart';
+import 'package:copy_lot/domain/repositories/clipboard_repository.dart';
+import 'package:copy_lot/presentation/providers/clipboard_provider.dart';
 
 /// テスト用のダミーリポジトリ
 class FakeSettingsRepository implements SettingsRepository {
@@ -36,12 +45,63 @@ class FakeSettingsRepository implements SettingsRepository {
   }
 }
 
+class FakeClipboardRepository implements ClipboardRepository {
+  final _controller = StreamController<ClipboardEvent>.broadcast();
+
+  @override
+  Stream<ClipboardEvent> get eventStream => _controller.stream;
+
+  @override
+  bool isListening = true;
+
+  @override
+  Future<void> startListening() async {
+    isListening = true;
+  }
+
+  @override
+  Future<void> stopListening() async {
+    isListening = false;
+  }
+
+  @override
+  void dispose() {
+    _controller.close();
+  }
+}
+
+class FakeTranslationRepository implements TranslationRepository {
+  @override
+  Future<TranslationResult> translate({
+    required String text,
+    required TranslationDirection direction,
+    required String apiKey,
+  }) async {
+    return TranslationResult(
+      sourceText: text,
+      translatedText: 'Translated: $text',
+      direction: direction,
+      textType: TextType.sentence,
+      timestamp: DateTime.now(),
+    );
+  }
+
+  @override
+  Future<void> validateApiKey(String apiKey) async {
+    if (apiKey == 'invalid-key') {
+      throw Exception('API key is invalid');
+    }
+  }
+}
+
 void main() {
   testWidgets('MainScreen UI smoke test (with API key)', (WidgetTester tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+          clipboardRepositoryProvider.overrideWithValue(FakeClipboardRepository()),
+          translationRepositoryProvider.overrideWithValue(FakeTranslationRepository()),
         ],
         child: const CopyLotApp(),
       ),
@@ -61,7 +121,7 @@ void main() {
     expect(find.text('翻訳 (Translation)'), findsOneWidget);
 
     // ステータスバーの確認
-    expect(find.text('クリップボード監視待機中'), findsOneWidget);
+    expect(find.text('クリップボード監視中'), findsOneWidget);
   });
 
   testWidgets('Redirects to SettingsScreen when API key is empty',
@@ -71,6 +131,8 @@ void main() {
         overrides: [
           settingsRepositoryProvider
               .overrideWithValue(FakeSettingsRepository(apiKey: '')),
+          clipboardRepositoryProvider.overrideWithValue(FakeClipboardRepository()),
+          translationRepositoryProvider.overrideWithValue(FakeTranslationRepository()),
         ],
         child: const CopyLotApp(),
       ),
