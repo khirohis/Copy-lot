@@ -72,6 +72,10 @@
    └── main.dart              # エントリポイント、トレイおよび Window 初期化
    ```
 
+3. **個別機能仕様 (Module Specifications):**
+   - 共通プロンプトの肥大化を防ぐため、特定機能の詳細要件・設計プロンプトは `docs/specs/` 配下に分離管理する。
+   - ネットワーククライアント基盤: [docs/specs/network_client.md](docs/specs/network_client.md)
+
 ## Code Policy & Assistant Guidelines
 
 1. **KISS & YAGNI 原則:** 最小限で無駄のないシンプルなコード構成を維持し、過剰な抽象化や未要求の機能拡張を避ける。
