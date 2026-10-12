@@ -5,6 +5,7 @@ import '../../domain/models/text_type.dart';
 import '../providers/clipboard_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/translation_provider.dart';
+import '../providers/window_tray_provider.dart';
 import '../widgets/text_card.dart';
 import '../widgets/translation_direction_switch.dart';
 import 'settings_screen.dart';
@@ -91,6 +92,14 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       final currentText = ref.read(clipboardNotifierProvider).currentText;
       if (currentText.trim().isNotEmpty && prev != next) {
         ref.read(translationNotifierProvider.notifier).translate(currentText);
+      }
+    });
+
+    // 最前面固定切り替え検知 → OS ウィンドウに反映
+    ref.listen(settingsNotifierProvider.select((s) => s.isAlwaysOnTop),
+        (prev, next) {
+      if (prev != next) {
+        ref.read(windowTrayDatasourceProvider).setAlwaysOnTop(next);
       }
     });
 

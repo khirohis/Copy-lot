@@ -2,7 +2,6 @@ import 'package:copy_lot/domain/models/settings_state.dart';
 import 'package:copy_lot/domain/models/text_type.dart';
 import 'package:copy_lot/domain/models/translation_direction.dart';
 import 'package:copy_lot/domain/models/translation_result.dart';
-import 'package:copy_lot/domain/repositories/settings_repository.dart';
 import 'package:copy_lot/domain/repositories/translation_repository.dart';
 import 'package:copy_lot/presentation/providers/settings_provider.dart';
 import 'package:copy_lot/presentation/providers/translation_provider.dart';
