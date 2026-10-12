@@ -1,0 +1,164 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:copy_lot/domain/models/settings_state.dart';
+import 'package:copy_lot/domain/models/translation_direction.dart';
+import 'package:copy_lot/domain/repositories/settings_repository.dart';
+import 'package:copy_lot/domain/models/text_type.dart';
+import 'package:copy_lot/domain/models/translation_result.dart';
+import 'package:copy_lot/domain/repositories/translation_repository.dart';
+import 'package:copy_lot/presentation/providers/translation_provider.dart';
+import 'package:copy_lot/app.dart';
+import 'package:copy_lot/presentation/providers/settings_provider.dart';
+
+import 'package:copy_lot/domain/models/clipboard_event.dart';
+import 'package:copy_lot/domain/repositories/clipboard_repository.dart';
+import 'package:copy_lot/presentation/providers/clipboard_provider.dart';
+
+/// テスト用のダミーリポジトリ
+class FakeSettingsRepository implements SettingsRepository {
+  FakeSettingsRepository({String apiKey = 'test-api-key'})
+      : _state = SettingsState(
+          apiKey: apiKey,
+          direction: TranslationDirection.enToJa,
+        );
+
+  SettingsState _state;
+
+  @override
+  Future<SettingsState> loadSettings() async => _state;
+
+  @override
+  Future<void> saveApiKey(String apiKey) async {
+    _state = _state.copyWith(apiKey: apiKey);
+  }
+
+  @override
+  Future<void> saveDirection(TranslationDirection direction) async {
+    _state = _state.copyWith(direction: direction);
+  }
+
+  @override
+  Future<void> saveAlwaysOnTop(bool isAlwaysOnTop) async {
+    _state = _state.copyWith(isAlwaysOnTop: isAlwaysOnTop);
+  }
+}
+
+class FakeClipboardRepository implements ClipboardRepository {
+  final _controller = StreamController<ClipboardEvent>.broadcast();
+
+  @override
+  Stream<ClipboardEvent> get eventStream => _controller.stream;
+
+  @override
+  bool isListening = true;
+
+  @override
+  Future<void> startListening() async {
+    isListening = true;
+  }
+
+  @override
+  Future<void> stopListening() async {
+    isListening = false;
+  }
+
+  @override
+  Future<String?> getClipboardText() async => null;
+
+  @override
+  void dispose() {
+    _controller.close();
+  }
+}
+
+class FakeTranslationRepository implements TranslationRepository {
+  @override
+  Future<TranslationResult> translate({
+    required String text,
+    required TranslationDirection direction,
+    required String apiKey,
+  }) async {
+    return TranslationResult(
+      sourceText: text,
+      translatedText: 'Translated: $text',
+      direction: direction,
+      textType: TextType.sentence,
+      timestamp: DateTime.now(),
+    );
+  }
+
+  @override
+  Future<void> validateApiKey(String apiKey) async {
+    if (apiKey == 'invalid-key') {
+      throw Exception('API key is invalid');
+    }
+  }
+}
+
+void main() {
+  testWidgets('MainScreen UI smoke test (with API key)', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+          clipboardRepositoryProvider.overrideWithValue(FakeClipboardRepository()),
+          translationRepositoryProvider.overrideWithValue(FakeTranslationRepository()),
+        ],
+        child: const CopyLotApp(),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // ヘッダータイトルの存在確認
+    expect(find.text('Copy-lot'), findsOneWidget);
+
+    // 翻訳方向スイッチの存在確認
+    expect(find.text('英語 → 日本語'), findsOneWidget);
+    expect(find.text('日本語 → 英語'), findsOneWidget);
+
+    // 原文・翻訳カードのタイトル確認
+    expect(find.text('原文 (Source)'), findsOneWidget);
+    expect(find.text('翻訳 (Translation)'), findsOneWidget);
+
+    // ステータスバーの確認（初期状態は自動監視OFF）
+    expect(find.text('自動監視 OFF (手動ペースト待機)'), findsOneWidget);
+
+    // 自動監視トグルスイッチの存在確認
+    expect(find.byType(Switch), findsOneWidget);
+
+    // 手動ペーストボタン（原文カード内）の存在確認
+    expect(find.byTooltip('クリップボードから貼り付け'), findsOneWidget);
+
+    // トグルをONにすると「クリップボード自動監視中」に切り替わることを確認
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(find.text('クリップボード自動監視中'), findsOneWidget);
+  });
+
+  testWidgets('Redirects to SettingsScreen when API key is empty',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          settingsRepositoryProvider
+              .overrideWithValue(FakeSettingsRepository(apiKey: '')),
+          clipboardRepositoryProvider.overrideWithValue(FakeClipboardRepository()),
+          translationRepositoryProvider.overrideWithValue(FakeTranslationRepository()),
+        ],
+        child: const CopyLotApp(),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // 設定画面のタイトルが表示されていることを確認（自動プッシュされた）
+    expect(find.text('設定'), findsOneWidget);
+    expect(find.text('Google Cloud Translation API'), findsOneWidget);
+    expect(find.text('ご利用を開始するには、Google Cloud Translation API キーの設定が必要です。'),
+        findsOneWidget);
+  });
+}
