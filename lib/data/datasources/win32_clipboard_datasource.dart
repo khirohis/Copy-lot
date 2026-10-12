@@ -119,24 +119,78 @@ class Win32ClipboardDatasource {
   }
 
   void _handleClipboardUpdate() {
-    final text = getClipboardText();
-    if (text != null && !_textController.isClosed) {
-      _textController.add(text);
-    }
+    scheduleMicrotask(() async {
+      final text = await getClipboardText();
+      if (text != null && !_textController.isClosed) {
+        _textController.add(text);
+      }
+    });
   }
 
   /// 現在のクリップボードからプレーンテキスト (CF_UNICODETEXT) を取得
-  String? getClipboardText() {
+  ///
+  /// 他プロセスがクリップボードを排他ロックしている場合、[maxRetries] 回まで
+  /// [retryInterval] 間隔で再試行（リトライ）を行います。
+  /// プレーンテキスト形式以外のデータ（画像・ファイル等）の場合は再試行せず即座に null を返します。
+  Future<String?> getClipboardText({
+    int maxRetries = 10,
+    Duration retryInterval = const Duration(milliseconds: 15),
+  }) async {
     if (!Platform.isWindows) return null;
 
-    final targetHwnd = _hwnd ?? HWND(nullptr);
-    final openRes = OpenClipboard(targetHwnd);
+    for (var attempt = 0; attempt < maxRetries; attempt++) {
+      final openRes = OpenClipboard(HWND(nullptr));
+      if (!openRes.value) {
+        // 排他ロック競合中: リトライ回数が残っていれば待機して再試行
+        if (attempt < maxRetries - 1) {
+          await Future<void>.delayed(retryInterval);
+          continue;
+        }
+        return null;
+      }
+
+      try {
+        // プレーンテキスト形式のみ対象 (画像・ファイル等はリトライ不要で終了)
+        if (!IsClipboardFormatAvailable(CF_UNICODETEXT).value) {
+          return null;
+        }
+
+        final hData = GetClipboardData(CF_UNICODETEXT);
+        if (hData.value.address == 0) {
+          return null;
+        }
+
+        final hGlobal = HGLOBAL(Pointer.fromAddress(hData.value.address));
+        final lockRes = GlobalLock(hGlobal);
+        final pData = lockRes.value;
+        if (pData.address == 0) {
+          return null;
+        }
+
+        try {
+          final text = pData.cast<Utf16>().toDartString();
+          return text;
+        } finally {
+          GlobalUnlock(hGlobal);
+        }
+      } finally {
+        CloseClipboard();
+      }
+    }
+
+    return null;
+  }
+
+  /// 現在のクリップボードからプレーンテキスト (CF_UNICODETEXT) を同期的に取得（再試行なし）
+  String? getClipboardTextSync() {
+    if (!Platform.isWindows) return null;
+
+    final openRes = OpenClipboard(HWND(nullptr));
     if (!openRes.value) {
       return null;
     }
 
     try {
-      // プレーンテキスト形式のみ対象 (画像・ファイル等は無視)
       if (!IsClipboardFormatAvailable(CF_UNICODETEXT).value) {
         return null;
       }
