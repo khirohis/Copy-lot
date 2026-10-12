@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,29 +23,31 @@ class MainScreen extends ConsumerStatefulWidget {
 class _MainScreenState extends ConsumerState<MainScreen> {
   bool _hasCheckedInitialApiKey = false;
   late final AppLifecycleListener _lifecycleListener;
+  StreamSubscription<bool>? _visibilitySubscription;
 
   @override
   void initState() {
     super.initState();
 
-    // ライフサイクル連動: Windows デスクトップで他アプリ操作中や最小化時にも監視を継続
+    // システムトレイ格納/復帰の連動購読
+    _visibilitySubscription = ref
+        .read(windowTrayDatasourceProvider)
+        .onVisibilityChanged
+        .listen((isVisible) {
+      ref
+          .read(clipboardNotifierProvider.notifier)
+          .setWindowVisibility(isVisible);
+    });
+
     _lifecycleListener = AppLifecycleListener(
-      onResume: () =>
-          ref.read(clipboardNotifierProvider.notifier).startListening(),
       onDetach: () =>
           ref.read(clipboardNotifierProvider.notifier).stopListening(),
     );
-
-    // 初回起動時の監視開始
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ref.read(clipboardNotifierProvider.notifier).startListening();
-      }
-    });
   }
 
   @override
   void dispose() {
+    _visibilitySubscription?.cancel();
     _lifecycleListener.dispose();
     super.dispose();
   }
@@ -180,6 +184,65 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // 自動監視スイッチ行
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant
+                              .withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            clipboard.isAutoMonitoringEnabled
+                                ? Icons.sync
+                                : Icons.sync_disabled,
+                            size: 18,
+                            color: clipboard.isAutoMonitoringEnabled
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurface
+                                    .withValues(alpha: 0.5),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'クリップボード自動監視',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Tooltip(
+                            message: settings.hasApiKey
+                                ? (clipboard.isAutoMonitoringEnabled
+                                    ? '自動監視を停止'
+                                    : '自動監視を開始')
+                                : 'API キーが設定されていないため有効化できません',
+                            child: Switch(
+                              value: clipboard.isAutoMonitoringEnabled,
+                              onChanged: settings.hasApiKey
+                                  ? (val) {
+                                      ref
+                                          .read(
+                                            clipboardNotifierProvider.notifier,
+                                          )
+                                          .toggleAutoMonitoring(val);
+                                    }
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
                     // 翻訳方向スイッチ
                     TranslationDirectionSwitch(
                       selected: settings.direction,
@@ -191,11 +254,16 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // 原文カード (クリップボード取得テキストをバインド)
+                    // 原文カード (クリップボード取得テキストをバインド & 手動ペーストボタン連携)
                     TextCard(
                       title: '原文 (Source)',
                       content: clipboard.currentText,
-                      placeholder: 'クリップボードにコピーしたテキストが自動で取り込まれます...',
+                      placeholder: 'クリップボードにコピーしたテキストが取り込まれます...',
+                      onPaste: () {
+                        ref
+                            .read(clipboardNotifierProvider.notifier)
+                            .pasteAndTranslate();
+                      },
                     ),
                     const SizedBox(height: 12),
 
@@ -219,7 +287,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
               decoration: BoxDecoration(
                 border: Border(
                   top: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.3),
                   ),
                 ),
               ),
@@ -235,7 +304,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    clipboard.isListening ? 'クリップボード監視中' : 'クリップボード監視停止中',
+                    clipboard.isListening
+                        ? 'クリップボード自動監視中'
+                        : (!clipboard.isAutoMonitoringEnabled
+                            ? '自動監視 OFF (手動ペースト待機)'
+                            : 'トレイ待機中 (監視停止)'),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                       fontSize: 11,

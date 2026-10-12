@@ -9,12 +9,14 @@ class TextCard extends StatelessWidget {
     required this.content,
     this.placeholder = '',
     this.isLoading = false,
+    this.onPaste,
   });
 
   final String title;
   final String content;
   final String placeholder;
   final bool isLoading;
+  final VoidCallback? onPaste;
 
   void _copyToClipboard(BuildContext context) {
     if (content.isEmpty) return;
@@ -51,11 +53,23 @@ class TextCard extends StatelessWidget {
                     color: theme.colorScheme.primary,
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.copy, size: 16),
-                  tooltip: '$titleをコピー',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: hasContent ? () => _copyToClipboard(context) : null,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (onPaste != null)
+                      IconButton(
+                        icon: const Icon(Icons.paste_outlined, size: 16),
+                        tooltip: 'クリップボードから貼り付け',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onPaste,
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.copy, size: 16),
+                      tooltip: '$titleをコピー',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: hasContent ? () => _copyToClipboard(context) : null,
+                    ),
+                  ],
                 ),
               ],
             ),

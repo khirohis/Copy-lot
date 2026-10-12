@@ -27,6 +27,9 @@ class _MockClipboardRepository implements ClipboardRepository {
     _mockIsListening = false;
   }
 
+  @override
+  Future<String?> getClipboardText() async => null;
+
   void emitEvent(ClipboardEvent event) {
     _controller.add(event);
   }
@@ -73,8 +76,8 @@ void main() {
     });
 
     test('updates state when eventStream emits ClipboardEvent', () async {
-      // Initialize listener
-      container.read(clipboardNotifierProvider);
+      final notifier = container.read(clipboardNotifierProvider.notifier);
+      await notifier.startListening();
 
       final event = ClipboardEvent(
         text: 'Copied string',
