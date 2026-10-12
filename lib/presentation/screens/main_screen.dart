@@ -25,16 +25,12 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   void initState() {
     super.initState();
 
-    // ライフサイクル連動: ウィンドウ表示中のみ監視、非表示/最小化時はリスナー解除
+    // ライフサイクル連動: Windows デスクトップで他アプリ操作中や最小化時にも監視を継続
     _lifecycleListener = AppLifecycleListener(
       onResume: () =>
           ref.read(clipboardNotifierProvider.notifier).startListening(),
-      onHide: () =>
+      onDetach: () =>
           ref.read(clipboardNotifierProvider.notifier).stopListening(),
-      onPause: () =>
-          ref.read(clipboardNotifierProvider.notifier).stopListening(),
-      onRestart: () =>
-          ref.read(clipboardNotifierProvider.notifier).startListening(),
     );
 
     // 初回起動時の監視開始
