@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -65,6 +66,9 @@ class FakeClipboardRepository implements ClipboardRepository {
   }
 
   @override
+  Future<String?> getClipboardText() async => null;
+
+  @override
   void dispose() {
     _controller.close();
   }
@@ -120,8 +124,19 @@ void main() {
     expect(find.text('原文 (Source)'), findsOneWidget);
     expect(find.text('翻訳 (Translation)'), findsOneWidget);
 
-    // ステータスバーの確認
-    expect(find.text('クリップボード監視中'), findsOneWidget);
+    // ステータスバーの確認（初期状態は自動監視OFF）
+    expect(find.text('自動監視 OFF (手動ペースト待機)'), findsOneWidget);
+
+    // 自動監視トグルスイッチの存在確認
+    expect(find.byType(Switch), findsOneWidget);
+
+    // 手動ペーストボタン（原文カード内）の存在確認
+    expect(find.byTooltip('クリップボードから貼り付け'), findsOneWidget);
+
+    // トグルをONにすると「クリップボード自動監視中」に切り替わることを確認
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(find.text('クリップボード自動監視中'), findsOneWidget);
   });
 
   testWidgets('Redirects to SettingsScreen when API key is empty',
