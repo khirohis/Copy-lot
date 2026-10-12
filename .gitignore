@@ -122,3 +122,6 @@ app.*.symbols
 
 # FVM Version Cache
 .fvm/
+
+# DevTools
+devtools_options.yaml
