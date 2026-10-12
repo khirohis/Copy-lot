@@ -5,6 +5,8 @@ class ClipboardState {
     this.originalLength = 0,
     this.isTruncated = false,
     this.isListening = false,
+    this.isAutoMonitoringEnabled = false,
+    this.isWindowVisible = true,
     this.lastUpdated,
   });
 
@@ -17,8 +19,14 @@ class ClipboardState {
   /// 5,000文字上限を超過して切り詰められたかどうか
   final bool isTruncated;
 
-  /// 現在監視中かどうか
+  /// 実効監視中かどうか（Windows API リスナーが登録中か）
   final bool isListening;
+
+  /// UI の自動監視トグルが有効化されているかどうか（デフォルト: false）
+  final bool isAutoMonitoringEnabled;
+
+  /// ウィンドウが表示中かどうか（デフォルト: true、トレイ格納時: false）
+  final bool isWindowVisible;
 
   /// 最終取得・更新日時
   final DateTime? lastUpdated;
@@ -31,6 +39,8 @@ class ClipboardState {
     int? originalLength,
     bool? isTruncated,
     bool? isListening,
+    bool? isAutoMonitoringEnabled,
+    bool? isWindowVisible,
     DateTime? lastUpdated,
   }) {
     return ClipboardState(
@@ -38,6 +48,9 @@ class ClipboardState {
       originalLength: originalLength ?? this.originalLength,
       isTruncated: isTruncated ?? this.isTruncated,
       isListening: isListening ?? this.isListening,
+      isAutoMonitoringEnabled:
+          isAutoMonitoringEnabled ?? this.isAutoMonitoringEnabled,
+      isWindowVisible: isWindowVisible ?? this.isWindowVisible,
       lastUpdated: lastUpdated ?? this.lastUpdated,
     );
   }
@@ -51,6 +64,8 @@ class ClipboardState {
           originalLength == other.originalLength &&
           isTruncated == other.isTruncated &&
           isListening == other.isListening &&
+          isAutoMonitoringEnabled == other.isAutoMonitoringEnabled &&
+          isWindowVisible == other.isWindowVisible &&
           lastUpdated == other.lastUpdated;
 
   @override
@@ -59,5 +74,7 @@ class ClipboardState {
       originalLength.hashCode ^
       isTruncated.hashCode ^
       isListening.hashCode ^
+      isAutoMonitoringEnabled.hashCode ^
+      isWindowVisible.hashCode ^
       lastUpdated.hashCode;
 }
