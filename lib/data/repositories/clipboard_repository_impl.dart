@@ -38,6 +38,15 @@ class ClipboardRepositoryImpl implements ClipboardRepository {
     _datasource.stop();
   }
 
+  @override
+  Future<String?> getClipboardText() async {
+    final rawText = await _datasource.getClipboardText();
+    if (rawText == null) return null;
+    final guardResult = _textGuard.process(rawText);
+    if (!guardResult.isValid) return null;
+    return guardResult.processedText;
+  }
+
   void _handleRawText(String rawText) {
     final guardResult = _textGuard.process(rawText);
     if (!guardResult.isValid) {

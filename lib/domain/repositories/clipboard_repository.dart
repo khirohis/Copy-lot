@@ -14,6 +14,9 @@ abstract class ClipboardRepository {
   /// クリップボードの監視を停止（Windows イベントリスナー解除）
   Future<void> stopListening();
 
+  /// 現在のクリップボードからプレーンテキストを直接取得
+  Future<String?> getClipboardText();
+
   /// リソースを破棄
   void dispose();
 }
