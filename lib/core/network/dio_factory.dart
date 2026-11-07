@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_turbo_fetch/flutter_turbo_fetch.dart';
 
 /// Factory that creates a preconfigured [Dio] client with default timeout settings.
 class DioFactory {
@@ -17,6 +18,11 @@ class DioFactory {
       sendTimeout: options?.sendTimeout ?? defaultSendTimeout,
     );
 
-    return Dio(baseOptions);
+    final dio = Dio(baseOptions);
+
+    dio.httpClientAdapter = TurboHttpAdapter();
+    dio.transformer = TurboTransformer();
+
+    return dio;
   }
 }
