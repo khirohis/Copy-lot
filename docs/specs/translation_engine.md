@@ -49,7 +49,7 @@
 
 ### 3.1 Google Cloud Translation API v2 (Basic) REST
 1. **通信方式:**
-   - サービスアカウント等の複雑な認証は用いず、ユーザーが入力した API キーをクエリパラメータに付与するシンプルな HTTP POST リクエスト（HTTP/2 対応 Dio を使用）。
+   - サービスアカウント等の複雑な認証は用いず、ユーザーが入力した API キーをクエリパラメータに付与するシンプルな HTTP POST リクエスト（Dio を使用）。
 2. **エンドポイント & リクエスト:**
    - URL: `https://translation.googleapis.com/language/translate/v2`
    - Query Parameters: `key={API_KEY}`
